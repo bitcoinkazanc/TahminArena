@@ -1,80 +1,136 @@
-import Link from "next/link";
+"use client";
+
+import { useEffect, useState } from "react";
 import PageContainer from "@/components/layout/PageContainer";
-
-type Match = {
-  id: string;
-  homeTeam: string;
-  awayTeam: string;
-  time: string;
-  status: "Yaklaşıyor" | "Canlı" | "Bitti";
-};
-
-const matches: Match[] = [
-  {
-    id: "demo-1",
-    homeTeam: "Galatasaray",
-    awayTeam: "Fenerbahçe",
-    time: "20:00",
-    status: "Yaklaşıyor",
-  },
-  {
-    id: "demo-2",
-    homeTeam: "Beşiktaş",
-    awayTeam: "Trabzonspor",
-    time: "20:30",
-    status: "Yaklaşıyor",
-  },
-  {
-    id: "demo-3",
-    homeTeam: "Başakşehir",
-    awayTeam: "Kasımpaşa",
-    time: "21:00",
-    status: "Yaklaşıyor",
-  },
-];
+import MatchList from "@/components/matches/MatchList";
+import Loading from "@/components/ui/Loading";
+import EmptyState from "@/components/ui/EmptyState";
+import type { Match } from "@/types/match";
 
 export default function MatchesPage() {
+  const [matches, setMatches] = useState<Match[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadMatches() {
+      try {
+        setLoading(true);
+        setError(false);
+
+        const response = await fetch("/api/matches", {
+          method: "GET",
+          cache: "no-store",
+        });
+
+        if (!response.ok) {
+          throw new Error("Maç verileri alınamadı.");
+        }
+
+        const data = (await response.json()) as {
+          success: boolean;
+          matches?: Match[];
+        };
+
+        if (!data.success || !data.matches) {
+          throw new Error("Geçersiz maç verisi.");
+        }
+
+        if (!cancelled) {
+          setMatches(data.matches);
+        }
+      } catch (loadError) {
+        console.error("Matches page error:", loadError);
+
+        if (!cancelled) {
+          setError(true);
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    }
+
+    loadMatches();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const firstGroup = matches.slice(0, 3);
+  const secondGroup = matches.slice(3, 6);
+  const remainingMatches = matches.slice(6);
+
   return (
     <main>
       <PageContainer>
         <section>
           <h2>⚽ Maçlar</h2>
-          <p>Bugünkü futbol maçlarını ve tahmin seçeneklerini keşfet.</p>
+          <p>
+            Güncel futbol maçlarını incele ve tahminini oluştur.
+          </p>
         </section>
 
-        <section className="matches-list" aria-label="Maç listesi">
-          {matches.map((match) => (
-            <Link
-              key={match.id}
-              href={`/matches/${match.id}`}
-              className="match-card"
-            >
-              <div className="match-card__status">{match.status}</div>
+        {loading && (
+          <Loading
+            text="Maçlar yükleniyor..."
+            size="medium"
+          />
+        )}
 
-              <div className="match-card__teams">
-                <span>{match.homeTeam}</span>
-                <strong>VS</strong>
-                <span>{match.awayTeam}</span>
-              </div>
+        {!loading && error && (
+          <EmptyState
+            icon="⚠️"
+            title="Maçlar yüklenemedi"
+            description="Maç verileri şu anda alınamıyor. Lütfen biraz sonra tekrar dene."
+          />
+        )}
 
-              <div className="match-card__time">{match.time}</div>
-            </Link>
-          ))}
-        </section>
+        {!loading && !error && matches.length === 0 && (
+          <EmptyState
+            icon="⚽"
+            title="Bugün maç bulunamadı"
+            description="Bugün için gösterilecek maç bulunmuyor."
+          />
+        )}
 
-        <section className="ad-slot" aria-label="Reklam alanı">
-          <span>Reklam Alanı</span>
-        </section>
+        {!loading && !error && matches.length > 0 && (
+          <>
+            {firstGroup.length > 0 && (
+              <MatchList matches={firstGroup} />
+            )}
 
-        <section className="matches-list" aria-label="Maç listesi">
-          <div className="empty-state">
-            <strong>Daha fazla maç yakında</strong>
-            <span>
-              Gerçek maç verileri Mackolik entegrasyonu tamamlandığında
-              gösterilecektir.
-            </span>
-          </div>
-        </section>
+            {matches.length > 3 && (
+              <section
+                className="ad-slot"
+                aria-label="Reklam alanı"
+              >
+                <span>Reklam Alanı</span>
+              </section>
+            )}
+
+            {secondGroup.length > 0 && (
+              <MatchList matches={secondGroup} />
+            )}
+
+            {matches.length > 6 && (
+              <section
+                className="ad-slot"
+                aria-label="Reklam alanı"
+              >
+                <span>Reklam Alanı</span>
+              </section>
+            )}
+
+            {remainingMatches.length > 0 && (
+              <MatchList matches={remainingMatches} />
+            )}
+          </>
+        )}
       </PageContainer>
     </main>
   );
