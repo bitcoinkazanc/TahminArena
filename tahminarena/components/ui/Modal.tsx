@@ -20,7 +20,12 @@ export default function Modal({
   }
 
   return (
-    <div className="ui-modal" role="dialog" aria-modal="true">
+    <div
+      className="ui-modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="ui-modal-title"
+    >
       <button
         type="button"
         className="ui-modal__backdrop"
@@ -30,7 +35,12 @@ export default function Modal({
 
       <div className="ui-modal__content">
         <div className="ui-modal__header">
-          <h2 className="ui-modal__title">{title}</h2>
+          <h2
+            id="ui-modal-title"
+            className="ui-modal__title"
+          >
+            {title}
+          </h2>
 
           <button
             type="button"
@@ -42,7 +52,9 @@ export default function Modal({
           </button>
         </div>
 
-        <div className="ui-modal__body">{children}</div>
+        <div className="ui-modal__body">
+          {children}
+        </div>
       </div>
     </div>
   );
