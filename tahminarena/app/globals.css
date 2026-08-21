@@ -191,6 +191,109 @@ main {
   font-weight: 600;
 }
 
+.matches-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 20px;
+}
+
+.match-card {
+  display: block;
+  padding: 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: 0 2px 8px rgba(17, 24, 39, 0.04);
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.match-card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 5px 14px rgba(17, 24, 39, 0.08);
+}
+
+.match-card:active {
+  transform: scale(0.99);
+}
+
+.match-card__status {
+  margin-bottom: 12px;
+  color: var(--primary);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.match-card__teams {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 10px;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.match-card__teams span:last-child {
+  text-align: right;
+}
+
+.match-card__teams strong {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.match-card__time {
+  margin-top: 12px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.ad-slot {
+  width: 100%;
+  min-height: 90px;
+  margin: 20px 0;
+  padding: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface);
+  border: 1px dashed #cbd5e1;
+  border-radius: 14px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  text-align: center;
+}
+
+.empty-state {
+  min-height: 120px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.empty-state strong {
+  color: var(--foreground);
+  font-size: 15px;
+}
+
+.empty-state span {
+  max-width: 420px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
 @media (max-width: 420px) {
   .app-header__inner {
     padding-right: 12px;
@@ -208,5 +311,9 @@ main {
 
   .bottom-menu__label {
     font-size: 9px;
+  }
+
+  .match-card__teams {
+    font-size: 14px;
   }
 }
