@@ -1,4 +1,7 @@
 import type { Metadata } from "next";
+import "./globals.css";
+import Header from "@/components/layout/Header";
+import BottomMenu from "@/components/layout/BottomMenu";
 
 export const metadata: Metadata = {
   title: "TahminArena",
@@ -12,7 +15,13 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="tr">
-      <body>{children}</body>
+      <body>
+        <Header />
+
+        <div className="app-content">{children}</div>
+
+        <BottomMenu />
+      </body>
     </html>
   );
 }
