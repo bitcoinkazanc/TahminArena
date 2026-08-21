@@ -1,3 +1,4 @@
+import AdSlot from "@/components/ads/AdSlot";
 import MatchCard from "@/components/matches/MatchCard";
 
 type Match = {
