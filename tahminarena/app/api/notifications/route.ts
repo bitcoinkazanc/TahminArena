@@ -11,6 +11,16 @@ type NotificationRequestBody = {
   notificationId?: unknown;
 };
 
+type CurrentUserResult =
+  | {
+      error: NextResponse;
+      userId: null;
+    }
+  | {
+      error: null;
+      userId: string;
+    };
+
 function isValidAction(
   value: unknown,
 ): value is NotificationAction {
@@ -32,7 +42,7 @@ function isValidNotificationId(
 
 async function getCurrentUserId(
   request: NextRequest,
-) {
+): Promise<CurrentUserResult> {
   const telegramAuth =
     getTelegramAuthFromRequest(
       request,
@@ -126,40 +136,55 @@ export async function GET(
       request,
     );
 
-    if (error || !userId) {
+    if (error !== null) {
       return error;
+    }
+
+    if (!userId) {
+      return NextResponse.json(
+        {
+          success: false,
+          message:
+            "Kullanıcı doğrulanamadı.",
+        },
+        {
+          status: 401,
+        },
+      );
     }
 
     const supabase =
       getSupabaseServerClient();
 
-    const { data, error: notificationsError } =
-      await supabase
-        .from("notifications")
-        .select(
-          `
-            id,
-            user_id,
-            actor_user_id,
-            type,
-            title,
-            message,
-            reference_id,
-            is_read,
-            created_at
-          `,
-        )
-        .eq(
-          "user_id",
-          userId,
-        )
-        .order(
-          "created_at",
-          {
-            ascending: false,
-          },
-        )
-        .limit(100);
+    const {
+      data,
+      error: notificationsError,
+    } = await supabase
+      .from("notifications")
+      .select(
+        `
+          id,
+          user_id,
+          actor_user_id,
+          type,
+          title,
+          message,
+          reference_id,
+          is_read,
+          created_at
+        `,
+      )
+      .eq(
+        "user_id",
+        userId,
+      )
+      .order(
+        "created_at",
+        {
+          ascending: false,
+        },
+      )
+      .limit(100);
 
     if (notificationsError) {
       console.error(
@@ -232,8 +257,21 @@ export async function PATCH(
       request,
     );
 
-    if (error || !userId) {
+    if (error !== null) {
       return error;
+    }
+
+    if (!userId) {
+      return NextResponse.json(
+        {
+          success: false,
+          message:
+            "Kullanıcı doğrulanamadı.",
+        },
+        {
+          status: 401,
+        },
+      );
     }
 
     const body =
@@ -263,20 +301,21 @@ export async function PATCH(
       body.action ===
       "read_all"
     ) {
-      const { error: updateError } =
-        await supabase
-          .from("notifications")
-          .update({
-            is_read: true,
-          })
-          .eq(
-            "user_id",
-            userId,
-          )
-          .eq(
-            "is_read",
-            false,
-          );
+      const {
+        error: updateError,
+      } = await supabase
+        .from("notifications")
+        .update({
+          is_read: true,
+        })
+        .eq(
+          "user_id",
+          userId,
+        )
+        .eq(
+          "is_read",
+          false,
+        );
 
       if (updateError) {
         console.error(
@@ -328,24 +367,26 @@ export async function PATCH(
     const notificationId =
       body.notificationId.trim();
 
-    const { data, error: updateError } =
-      await supabase
-        .from("notifications")
-        .update({
-          is_read: true,
-        })
-        .eq(
-          "id",
-          notificationId,
-        )
-        .eq(
-          "user_id",
-          userId,
-        )
-        .select(
-          "id, is_read",
-        )
-        .maybeSingle();
+    const {
+      data,
+      error: updateError,
+    } = await supabase
+      .from("notifications")
+      .update({
+        is_read: true,
+      })
+      .eq(
+        "id",
+        notificationId,
+      )
+      .eq(
+        "user_id",
+        userId,
+      )
+      .select(
+        "id, is_read",
+      )
+      .maybeSingle();
 
     if (updateError) {
       console.error(
