@@ -1,51 +1,28 @@
 import { NextRequest, NextResponse } from "next/server";
-import type {
-  CreateReportInput,
-  ReportReason,
-  ReportTargetType,
-} from "@/types/report";
+import { getSupabaseServerClient } from "@/lib/supabase/server";
+import { getTelegramAuthFromRequest } from "@/lib/telegram/server";
+import { validateText } from "@/lib/security/validation";
+
+type ReportTargetType =
+  | "user"
+  | "prediction"
+  | "comment"
+  | "chat_message";
 
 type ReportRequestBody = {
   targetType?: unknown;
   targetId?: unknown;
   reason?: unknown;
-  description?: unknown;
 };
-
-const targetTypes: ReportTargetType[] = [
-  "user",
-  "prediction",
-  "comment",
-  "message",
-];
-
-const reasons: ReportReason[] = [
-  "spam",
-  "harassment",
-  "inappropriate",
-  "fake",
-  "other",
-];
 
 function isValidTargetType(
   value: unknown,
 ): value is ReportTargetType {
   return (
-    typeof value === "string" &&
-    targetTypes.includes(
-      value as ReportTargetType,
-    )
-  );
-}
-
-function isValidReason(
-  value: unknown,
-): value is ReportReason {
-  return (
-    typeof value === "string" &&
-    reasons.includes(
-      value as ReportReason,
-    )
+    value === "user" ||
+    value === "prediction" ||
+    value === "comment" ||
+    value === "chat_message"
   );
 }
 
@@ -59,20 +36,31 @@ function isValidTargetId(
   );
 }
 
-function isValidDescription(
-  value: unknown,
-): value is string | undefined {
-  return (
-    value === undefined ||
-    (typeof value === "string" &&
-      value.trim().length <= 500)
-  );
-}
-
 export async function POST(
   request: NextRequest,
 ) {
   try {
+    const telegramAuth =
+      getTelegramAuthFromRequest(
+        request,
+      );
+
+    if (
+      !telegramAuth.valid ||
+      !telegramAuth.user
+    ) {
+      return NextResponse.json(
+        {
+          success: false,
+          message:
+            "Telegram oturumu doğrulanamadı.",
+        },
+        {
+          status: 401,
+        },
+      );
+    }
+
     const body =
       (await request.json()) as ReportRequestBody;
 
@@ -85,7 +73,7 @@ export async function POST(
         {
           success: false,
           message:
-            "Geçersiz bildirim hedefi.",
+            "Geçersiz rapor hedefi.",
         },
         {
           status: 400,
@@ -94,7 +82,9 @@ export async function POST(
     }
 
     if (
-      !isValidTargetId(body.targetId)
+      !isValidTargetId(
+        body.targetId,
+      )
     ) {
       return NextResponse.json(
         {
@@ -108,12 +98,20 @@ export async function POST(
       );
     }
 
-    if (!isValidReason(body.reason)) {
+    const reasonResult =
+      validateText(
+        body.reason,
+        "Rapor nedeni",
+        1,
+        500,
+      );
+
+    if (!reasonResult.success) {
       return NextResponse.json(
         {
           success: false,
           message:
-            "Geçersiz bildirim nedeni.",
+            reasonResult.message,
         },
         {
           status: 400,
@@ -121,48 +119,94 @@ export async function POST(
       );
     }
 
-    if (
-      !isValidDescription(
-        body.description,
-      )
-    ) {
+    const supabase =
+      getSupabaseServerClient();
+
+    const { data: reporter, error: reporterError } =
+      await supabase
+        .from("users")
+        .select("id")
+        .eq(
+          "telegram_id",
+          String(
+            telegramAuth.user.id,
+          ),
+        )
+        .maybeSingle();
+
+    if (reporterError) {
+      console.error(
+        "Reporter lookup error:",
+        reporterError,
+      );
+
       return NextResponse.json(
         {
           success: false,
           message:
-            "Açıklama en fazla 500 karakter olabilir.",
+            "Kullanıcı doğrulanamadı.",
         },
         {
-          status: 400,
+          status: 500,
         },
       );
     }
 
-    const input: CreateReportInput = {
-      targetType: body.targetType,
-      targetId: body.targetId.trim(),
-      reason: body.reason,
-      description:
-        typeof body.description ===
-        "string"
-          ? body.description
-              .trim()
-              .slice(0, 500)
-          : undefined,
-    };
+    if (!reporter) {
+      return NextResponse.json(
+        {
+          success: false,
+          message:
+            "Kullanıcı profili bulunamadı.",
+        },
+        {
+          status: 404,
+        },
+      );
+    }
+
+    const { data, error } =
+      await supabase
+        .from("reports")
+        .insert({
+          reporter_id:
+            reporter.id,
+          target_type:
+            body.targetType,
+          target_id:
+            body.targetId.trim(),
+          reason:
+            reasonResult.data,
+          status:
+            "pending",
+        })
+        .select(
+          "id, reporter_id, target_type, target_id, reason, status, created_at, updated_at",
+        )
+        .single();
+
+    if (error) {
+      console.error(
+        "Reports POST Supabase error:",
+        error,
+      );
+
+      return NextResponse.json(
+        {
+          success: false,
+          message:
+            "Rapor gönderilemedi.",
+        },
+        {
+          status: 500,
+        },
+      );
+    }
 
     return NextResponse.json(
       {
         success: true,
-        report: {
-          id: `demo-report-${Date.now()}`,
-          ...input,
-          status: "pending",
-          createdAt:
-            new Date().toISOString(),
-          updatedAt:
-            new Date().toISOString(),
-        },
+        report: data,
       },
       {
         status: 201,
@@ -178,7 +222,7 @@ export async function POST(
       {
         success: false,
         message:
-          "Bildirim oluşturulamadı.",
+          "Rapor gönderilemedi.",
       },
       {
         status: 500,
