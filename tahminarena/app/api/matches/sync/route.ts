@@ -26,7 +26,7 @@ function isAuthorized(
   );
 }
 
-export async function GET(
+async function syncMatches(
   request: NextRequest,
 ) {
   try {
@@ -178,4 +178,16 @@ export async function GET(
       },
     );
   }
+}
+
+export async function GET(
+  request: NextRequest,
+) {
+  return syncMatches(request);
+}
+
+export async function POST(
+  request: NextRequest,
+) {
+  return syncMatches(request);
 }
