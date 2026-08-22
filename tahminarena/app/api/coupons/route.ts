@@ -12,6 +12,11 @@ type CouponRequestBody = {
   selections?: unknown;
 };
 
+type ValidCouponSelection = {
+  matchId: string;
+  option: "1" | "X" | "2";
+};
+
 type CurrentUserResult =
   | {
       error: NextResponse;
@@ -55,29 +60,32 @@ function isValidName(
   );
 }
 
-function isValidSelections(
+function validateSelections(
   value: unknown,
-): value is CouponSelection[] {
+): ValidCouponSelection[] | null {
   if (!Array.isArray(value)) {
-    return false;
+    return null;
   }
 
   if (
     value.length < 2 ||
     value.length > 20
   ) {
-    return false;
+    return null;
   }
 
   const matchIds =
     new Set<string>();
+
+  const selections: ValidCouponSelection[] =
+    [];
 
   for (const selection of value) {
     if (
       typeof selection !== "object" ||
       selection === null
     ) {
-      return false;
+      return null;
     }
 
     const item =
@@ -91,7 +99,7 @@ function isValidSelections(
         item.option,
       )
     ) {
-      return false;
+      return null;
     }
 
     const matchId =
@@ -100,13 +108,18 @@ function isValidSelections(
     if (
       matchIds.has(matchId)
     ) {
-      return false;
+      return null;
     }
 
     matchIds.add(matchId);
+
+    selections.push({
+      matchId,
+      option: item.option,
+    });
   }
 
-  return true;
+  return selections;
 }
 
 async function getCurrentUserId(
@@ -357,11 +370,12 @@ export async function POST(
       );
     }
 
-    if (
-      !isValidSelections(
+    const selections =
+      validateSelections(
         body.selections,
-      )
-    ) {
+      );
+
+    if (!selections) {
       return NextResponse.json(
         {
           success: false,
@@ -376,16 +390,6 @@ export async function POST(
 
     const supabase =
       getSupabaseServerClient();
-
-    const selections =
-      body.selections.map(
-        (selection) => ({
-          matchId:
-            selection.matchId!.trim(),
-          option:
-            selection.option,
-        }),
-      );
 
     const matchIds =
       selections.map(
