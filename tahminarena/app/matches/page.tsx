@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import PageContainer from "@/components/layout/PageContainer";
 import MatchList from "@/components/matches/MatchList";
+import AdSlot from "@/components/ads/AdSlot";
 import Loading from "@/components/ui/Loading";
 import EmptyState from "@/components/ui/EmptyState";
 import type { Match } from "@/types/match";
@@ -20,29 +21,45 @@ export default function MatchesPage() {
         setLoading(true);
         setError(false);
 
-        const response = await fetch("/api/matches", {
-          method: "GET",
-          cache: "no-store",
-        });
+        const response = await fetch(
+          "/api/matches",
+          {
+            method: "GET",
+            cache: "no-store",
+          },
+        );
 
         if (!response.ok) {
-          throw new Error("Maç verileri alınamadı.");
+          throw new Error(
+            "Maç verileri alınamadı.",
+          );
         }
 
-        const data = (await response.json()) as {
-          success: boolean;
-          matches?: Match[];
-        };
+        const data =
+          (await response.json()) as {
+            success: boolean;
+            matches?: Match[];
+          };
 
-        if (!data.success || !data.matches) {
-          throw new Error("Geçersiz maç verisi.");
+        if (
+          !data.success ||
+          !data.matches
+        ) {
+          throw new Error(
+            "Geçersiz maç verisi.",
+          );
         }
 
         if (!cancelled) {
-          setMatches(data.matches);
+          setMatches(
+            data.matches,
+          );
         }
       } catch (loadError) {
-        console.error("Matches page error:", loadError);
+        console.error(
+          "Matches page error:",
+          loadError,
+        );
 
         if (!cancelled) {
           setError(true);
@@ -61,17 +78,30 @@ export default function MatchesPage() {
     };
   }, []);
 
-  const firstGroup = matches.slice(0, 3);
-  const secondGroup = matches.slice(3, 6);
-  const remainingMatches = matches.slice(6);
+  const groups: Match[][] = [];
+
+  for (
+    let index = 0;
+    index < matches.length;
+    index += 3
+  ) {
+    groups.push(
+      matches.slice(
+        index,
+        index + 3,
+      ),
+    );
+  }
 
   return (
     <main>
       <PageContainer>
         <section>
           <h2>⚽ Maçlar</h2>
+
           <p>
-            Güncel futbol maçlarını incele ve tahminini oluştur.
+            Güncel futbol maçlarını
+            incele ve tahminini oluştur.
           </p>
         </section>
 
@@ -90,47 +120,42 @@ export default function MatchesPage() {
           />
         )}
 
-        {!loading && !error && matches.length === 0 && (
-          <EmptyState
-            icon="⚽"
-            title="Bugün maç bulunamadı"
-            description="Bugün için gösterilecek maç bulunmuyor."
-          />
-        )}
+        {!loading &&
+          !error &&
+          matches.length === 0 && (
+            <EmptyState
+              icon="⚽"
+              title="Bugün maç bulunamadı"
+              description="Bugün için gösterilecek maç bulunmuyor."
+            />
+          )}
 
-        {!loading && !error && matches.length > 0 && (
-          <>
-            {firstGroup.length > 0 && (
-              <MatchList matches={firstGroup} />
-            )}
+        {!loading &&
+          !error &&
+          matches.length > 0 && (
+            <>
+              {groups.map(
+                (
+                  group,
+                  index,
+                ) => (
+                  <div
+                    key={`match-group-${index}`}
+                  >
+                    <MatchList
+                      matches={group}
+                    />
 
-            {matches.length > 3 && (
-              <section
-                className="ad-slot"
-                aria-label="Reklam alanı"
-              >
-                <span>Reklam Alanı</span>
-              </section>
-            )}
-
-            {secondGroup.length > 0 && (
-              <MatchList matches={secondGroup} />
-            )}
-
-            {matches.length > 6 && (
-              <section
-                className="ad-slot"
-                aria-label="Reklam alanı"
-              >
-                <span>Reklam Alanı</span>
-              </section>
-            )}
-
-            {remainingMatches.length > 0 && (
-              <MatchList matches={remainingMatches} />
-            )}
-          </>
-        )}
+                    {index <
+                      groups.length -
+                        1 && (
+                      <AdSlot />
+                    )}
+                  </div>
+                ),
+              )}
+            </>
+          )}
       </PageContainer>
     </main>
   );
