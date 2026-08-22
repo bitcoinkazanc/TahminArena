@@ -12,6 +12,16 @@ type CouponRequestBody = {
   selections?: unknown;
 };
 
+type CurrentUserResult =
+  | {
+      error: NextResponse;
+      userId: null;
+    }
+  | {
+      error: null;
+      userId: string;
+    };
+
 function isValidOption(
   value: unknown,
 ): value is "1" | "X" | "2" {
@@ -34,7 +44,7 @@ function isValidMatchId(
 
 function isValidName(
   value: unknown,
-): value is string {
+): value is string | null | undefined {
   return (
     value === undefined ||
     value === null ||
@@ -64,8 +74,7 @@ function isValidSelections(
 
   for (const selection of value) {
     if (
-      typeof selection !==
-        "object" ||
+      typeof selection !== "object" ||
       selection === null
     ) {
       return false;
@@ -102,7 +111,7 @@ function isValidSelections(
 
 async function getCurrentUserId(
   request: NextRequest,
-) {
+): Promise<CurrentUserResult> {
   const telegramAuth =
     getTelegramAuthFromRequest(
       request,
@@ -196,43 +205,58 @@ export async function GET(
       request,
     );
 
-    if (error || !userId) {
+    if (error !== null) {
       return error;
+    }
+
+    if (!userId) {
+      return NextResponse.json(
+        {
+          success: false,
+          message:
+            "Kullanıcı doğrulanamadı.",
+        },
+        {
+          status: 401,
+        },
+      );
     }
 
     const supabase =
       getSupabaseServerClient();
 
-    const { data, error: couponsError } =
-      await supabase
-        .from("coupons")
-        .select(
-          `
+    const {
+      data,
+      error: couponsError,
+    } = await supabase
+      .from("coupons")
+      .select(
+        `
+          id,
+          user_id,
+          name,
+          status,
+          created_at,
+          updated_at,
+          coupon_selections (
             id,
-            user_id,
-            name,
-            status,
-            created_at,
-            updated_at,
-            coupon_selections (
-              id,
-              match_id,
-              option,
-              created_at
-            )
-          `,
-        )
-        .eq(
-          "user_id",
-          userId,
-        )
-        .order(
-          "created_at",
-          {
-            ascending: false,
-          },
-        )
-        .limit(50);
+            match_id,
+            option,
+            created_at
+          )
+        `,
+      )
+      .eq(
+        "user_id",
+        userId,
+      )
+      .order(
+        "created_at",
+        {
+          ascending: false,
+        },
+      )
+      .limit(50);
 
     if (couponsError) {
       console.error(
@@ -296,8 +320,21 @@ export async function POST(
       request,
     );
 
-    if (error || !userId) {
+    if (error !== null) {
       return error;
+    }
+
+    if (!userId) {
+      return NextResponse.json(
+        {
+          success: false,
+          message:
+            "Kullanıcı doğrulanamadı.",
+        },
+        {
+          status: 401,
+        },
+      );
     }
 
     const body =
@@ -344,7 +381,7 @@ export async function POST(
       body.selections.map(
         (selection) => ({
           matchId:
-            selection.matchId.trim(),
+            selection.matchId!.trim(),
           option:
             selection.option,
         }),
@@ -356,16 +393,18 @@ export async function POST(
           selection.matchId,
       );
 
-    const { data: matches, error: matchesError } =
-      await supabase
-        .from("matches")
-        .select(
-          "id, date_time, status",
-        )
-        .in(
-          "id",
-          matchIds,
-        );
+    const {
+      data: matches,
+      error: matchesError,
+    } = await supabase
+      .from("matches")
+      .select(
+        "id, date_time, status",
+      )
+      .in(
+        "id",
+        matchIds,
+      );
 
     if (matchesError) {
       console.error(
@@ -437,18 +476,20 @@ export async function POST(
           null
         : null;
 
-    const { data: coupon, error: couponError } =
-      await supabase
-        .from("coupons")
-        .insert({
-          user_id: userId,
-          name: couponName,
-          status: "Bekliyor",
-        })
-        .select(
-          "id, user_id, name, status, created_at, updated_at",
-        )
-        .single();
+    const {
+      data: coupon,
+      error: couponError,
+    } = await supabase
+      .from("coupons")
+      .insert({
+        user_id: userId,
+        name: couponName,
+        status: "Bekliyor",
+      })
+      .select(
+        "id, user_id, name, status, created_at, updated_at",
+      )
+      .single();
 
     if (couponError) {
       console.error(
