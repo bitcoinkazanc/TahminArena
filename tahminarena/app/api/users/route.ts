@@ -1,15 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
+import { getTelegramAuthFromRequest } from "@/lib/telegram/server";
 import {
   validateText,
-  validateId,
   isValidUsername,
   isValidUserPrivacy,
 } from "@/lib/security/validation";
 import type { UserPrivacy } from "@/types/user";
 
 type CreateUserBody = {
-  telegramId?: unknown;
   username?: unknown;
   displayName?: unknown;
   avatarUrl?: unknown;
@@ -126,28 +125,29 @@ export async function POST(
   request: NextRequest,
 ) {
   try {
-    const body =
-      (await request.json()) as CreateUserBody;
-
-    const telegramIdResult =
-      validateId(
-        body.telegramId,
-        "Telegram ID",
-        50,
+    const telegramAuth =
+      getTelegramAuthFromRequest(
+        request,
       );
 
-    if (!telegramIdResult.success) {
+    if (
+      !telegramAuth.valid ||
+      !telegramAuth.user
+    ) {
       return NextResponse.json(
         {
           success: false,
           message:
-            telegramIdResult.message,
+            "Telegram oturumu doğrulanamadı.",
         },
         {
-          status: 400,
+          status: 401,
         },
       );
     }
+
+    const body =
+      (await request.json()) as CreateUserBody;
 
     if (!isValidUsername(body.username)) {
       return NextResponse.json(
@@ -186,12 +186,13 @@ export async function POST(
     let bio: string | null = null;
 
     if (body.bio !== undefined) {
-      const bioResult = validateText(
-        body.bio,
-        "Biyografi",
-        0,
-        500,
-      );
+      const bioResult =
+        validateText(
+          body.bio,
+          "Biyografi",
+          0,
+          500,
+        );
 
       if (!bioResult.success) {
         return NextResponse.json(
@@ -235,6 +236,11 @@ export async function POST(
           ? body.privacy
           : "Açık";
 
+    const telegramId =
+      String(
+        telegramAuth.user.id,
+      );
+
     const supabase =
       getSupabaseServerClient();
 
@@ -243,7 +249,7 @@ export async function POST(
         .from("users")
         .insert({
           telegram_id:
-            telegramIdResult.data,
+            telegramId,
           username:
             body.username.trim(),
           display_name:
