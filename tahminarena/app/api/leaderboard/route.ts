@@ -1,87 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
-import type {
-  LeaderboardEntry,
-  LeaderboardPeriod,
-} from "@/types/leaderboard";
+import { getSupabaseServerClient } from "@/lib/supabase/server";
 
-const validPeriods: LeaderboardPeriod[] = [
-  "daily",
-  "weekly",
-  "monthly",
-  "all",
-];
-
-const demoEntries: LeaderboardEntry[] = [
-  {
-    rank: 1,
-    userId: "user-1",
-    username: "futbolsever",
-    displayName: "Futbolsever",
-    avatarUrl: null,
-    predictionsCount: 42,
-    correctPredictionsCount: 31,
-    incorrectPredictionsCount: 11,
-    successRate: 74,
-    points: 310,
-  },
-  {
-    rank: 2,
-    userId: "user-2",
-    username: "tahminci",
-    displayName: "Tahminci",
-    avatarUrl: null,
-    predictionsCount: 38,
-    correctPredictionsCount: 27,
-    incorrectPredictionsCount: 11,
-    successRate: 71,
-    points: 285,
-  },
-  {
-    rank: 3,
-    userId: "user-3",
-    username: "golustasi",
-    displayName: "Gol Ustası",
-    avatarUrl: null,
-    predictionsCount: 35,
-    correctPredictionsCount: 24,
-    incorrectPredictionsCount: 11,
-    successRate: 69,
-    points: 260,
-  },
-  {
-    rank: 4,
-    userId: "user-4",
-    username: "macanalisti",
-    displayName: "Maç Analisti",
-    avatarUrl: null,
-    predictionsCount: 41,
-    correctPredictionsCount: 27,
-    incorrectPredictionsCount: 14,
-    successRate: 66,
-    points: 245,
-  },
-  {
-    rank: 5,
-    userId: "user-5",
-    username: "futbolkolik",
-    displayName: "Futbolkolik",
-    avatarUrl: null,
-    predictionsCount: 33,
-    correctPredictionsCount: 21,
-    incorrectPredictionsCount: 12,
-    successRate: 64,
-    points: 220,
-  },
-];
+type LeaderboardPeriod =
+  | "daily"
+  | "weekly"
+  | "monthly"
+  | "all";
 
 function isValidPeriod(
   value: string | null,
 ): value is LeaderboardPeriod {
   return (
-    value !== null &&
-    validPeriods.includes(
-      value as LeaderboardPeriod,
-    )
+    value === "daily" ||
+    value === "weekly" ||
+    value === "monthly" ||
+    value === "all"
   );
 }
 
@@ -89,21 +22,135 @@ export async function GET(
   request: NextRequest,
 ) {
   try {
-    const periodParam =
+    const requestedPeriod =
       request.nextUrl.searchParams.get(
         "period",
       );
 
-    const period: LeaderboardPeriod =
-      isValidPeriod(periodParam)
-        ? periodParam
-        : "weekly";
+    const period =
+      requestedPeriod ??
+      "weekly";
+
+    if (
+      !isValidPeriod(period)
+    ) {
+      return NextResponse.json(
+        {
+          success: false,
+          message:
+            "Geçersiz liderlik dönemi.",
+        },
+        {
+          status: 400,
+        },
+      );
+    }
+
+    const supabase =
+      getSupabaseServerClient();
+
+    const { data, error } =
+      await supabase
+        .from(
+          "leaderboard_scores",
+        )
+        .select(
+          `
+            id,
+            user_id,
+            period,
+            points,
+            predictions_count,
+            correct_predictions_count,
+            incorrect_predictions_count,
+            success_rate,
+            updated_at,
+            users (
+              username,
+              display_name,
+              avatar_url,
+              privacy
+            )
+          `,
+        )
+        .eq(
+          "period",
+          period,
+        )
+        .order(
+          "points",
+          {
+            ascending: false,
+          },
+        )
+        .order(
+          "correct_predictions_count",
+          {
+            ascending: false,
+          },
+        )
+        .order(
+          "predictions_count",
+          {
+            ascending: true,
+          },
+        )
+        .limit(100);
+
+    if (error) {
+      console.error(
+        "Leaderboard GET Supabase error:",
+        error,
+      );
+
+      return NextResponse.json(
+        {
+          success: false,
+          message:
+            "Liderlik tablosu alınamadı.",
+        },
+        {
+          status: 500,
+        },
+      );
+    }
+
+    const leaderboard =
+      (data ?? []).map(
+        (
+          item,
+          index,
+        ) => ({
+          rank: index + 1,
+          id: item.id,
+          userId:
+            item.user_id,
+          period:
+            item.period,
+          points:
+            item.points,
+          predictionsCount:
+            item.predictions_count,
+          correctPredictionsCount:
+            item.correct_predictions_count,
+          incorrectPredictionsCount:
+            item.incorrect_predictions_count,
+          successRate:
+            Number(
+              item.success_rate,
+            ),
+          user:
+            item.users ?? null,
+          updatedAt:
+            item.updated_at,
+        }),
+      );
 
     return NextResponse.json(
       {
         success: true,
         period,
-        entries: demoEntries,
+        leaderboard,
       },
       {
         status: 200,
@@ -123,7 +170,7 @@ export async function GET(
       {
         success: false,
         message:
-          "Liderlik verileri alınamadı.",
+          "Liderlik tablosu alınamadı.",
       },
       {
         status: 500,
