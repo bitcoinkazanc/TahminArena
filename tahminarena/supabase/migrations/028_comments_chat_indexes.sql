@@ -20,8 +20,8 @@ on public.chat_messages (
   created_at desc
 );
 
-create index if not exists chat_messages_type_created_idx
+create index if not exists chat_messages_match_created_idx
 on public.chat_messages (
-  chat_type,
+  match_id,
   created_at desc
 );
