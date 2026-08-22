@@ -1,91 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
-import type {
-  SearchMatchResult,
-  SearchPredictionResult,
-  SearchResponse,
-  SearchUserResult,
-} from "@/types/search";
+import { getSupabaseServerClient } from "@/lib/supabase/server";
 
-const demoUsers: SearchUserResult[] = [
-  {
-    type: "user",
-    id: "user-1",
-    username: "futbolsever",
-    displayName: "Futbolsever",
-    avatarUrl: null,
-  },
-  {
-    type: "user",
-    id: "user-2",
-    username: "tahminci",
-    displayName: "Tahminci",
-    avatarUrl: null,
-  },
-  {
-    type: "user",
-    id: "user-3",
-    username: "golustasi",
-    displayName: "Gol Ustası",
-    avatarUrl: null,
-  },
-];
+function isValidQuery(
+  value: string | null,
+): value is string {
+  if (!value) {
+    return false;
+  }
 
-const demoMatches: SearchMatchResult[] = [
-  {
-    type: "match",
-    id: "demo-match-1",
-    homeTeam: "Galatasaray",
-    awayTeam: "Fenerbahçe",
-    dateTime: "2026-08-22T20:00:00+03:00",
-    status: "Yaklaşıyor",
-  },
-  {
-    type: "match",
-    id: "demo-match-2",
-    homeTeam: "Beşiktaş",
-    awayTeam: "Trabzonspor",
-    dateTime: "2026-08-22T20:30:00+03:00",
-    status: "Yaklaşıyor",
-  },
-];
+  const query =
+    value.trim();
 
-const demoPredictions: SearchPredictionResult[] = [
-  {
-    type: "prediction",
-    id: "demo-prediction-1",
-    username: "tahminci",
-    displayName: "Tahminci",
-    homeTeam: "Galatasaray",
-    awayTeam: "Fenerbahçe",
-    option: "1",
-  },
-  {
-    type: "prediction",
-    id: "demo-prediction-2",
-    username: "futbolsever",
-    displayName: "Futbolsever",
-    homeTeam: "Beşiktaş",
-    awayTeam: "Trabzonspor",
-    option: "X",
-  },
-];
-
-function normalizeSearchValue(
-  value: string,
-): string {
-  return value
-    .trim()
-    .toLocaleLowerCase("tr-TR");
-}
-
-function matchesQuery(
-  values: string[],
-  query: string,
-): boolean {
-  return values.some((value) =>
-    normalizeSearchValue(value).includes(
-      query,
-    ),
+  return (
+    query.length >= 1 &&
+    query.length <= 50
   );
 }
 
@@ -93,40 +21,19 @@ export async function GET(
   request: NextRequest,
 ) {
   try {
-    const rawQuery =
+    const query =
       request.nextUrl.searchParams.get(
         "q",
-      ) ?? "";
-
-    const query = rawQuery.trim();
-
-    if (query.length === 0) {
-      const response: SearchResponse = {
-        query: "",
-        results: [],
-      };
-
-      return NextResponse.json(
-        {
-          success: true,
-          ...response,
-        },
-        {
-          status: 200,
-          headers: {
-            "Cache-Control":
-              "no-store",
-          },
-        },
       );
-    }
 
-    if (query.length > 100) {
+    if (
+      !isValidQuery(query)
+    ) {
       return NextResponse.json(
         {
           success: false,
           message:
-            "Arama metni en fazla 100 karakter olabilir.",
+            "Arama metni en az 1 karakter olmalıdır.",
         },
         {
           status: 400,
@@ -134,58 +41,88 @@ export async function GET(
       );
     }
 
-    const normalizedQuery =
-      normalizeSearchValue(query);
+    const search =
+      query.trim();
 
-    const users = demoUsers.filter(
-      (user) =>
-        matchesQuery(
-          [
-            user.username,
-            user.displayName,
-          ],
-          normalizedQuery,
-        ),
-    );
+    const supabase =
+      getSupabaseServerClient();
 
-    const matches = demoMatches.filter(
-      (match) =>
-        matchesQuery(
-          [
-            match.homeTeam,
-            match.awayTeam,
-          ],
-          normalizedQuery,
-        ),
-    );
+    const { data, error } =
+      await supabase
+        .from("users")
+        .select(
+          `
+            id,
+            username,
+            display_name,
+            avatar_url,
+            bio,
+            privacy,
+            followers_count,
+            following_count,
+            predictions_count,
+            correct_predictions_count
+          `,
+        )
+        .or(
+          `username.ilike.%${search}%,display_name.ilike.%${search}%`,
+        )
+        .order(
+          "username",
+          {
+            ascending: true,
+          },
+        )
+        .limit(20);
 
-    const predictions =
-      demoPredictions.filter(
-        (prediction) =>
-          matchesQuery(
-            [
-              prediction.username,
-              prediction.displayName,
-              prediction.homeTeam,
-              prediction.awayTeam,
-            ],
-            normalizedQuery,
-          ),
+    if (error) {
+      console.error(
+        "Search users Supabase error:",
+        error,
       );
 
-    const response: SearchResponse = {
-      query,
-      results: [
-        ...users,
-        ...matches,
-        ...predictions,
-      ].slice(0, 50),
-    };
+      return NextResponse.json(
+        {
+          success: false,
+          message:
+            "Arama yapılamadı.",
+        },
+        {
+          status: 500,
+        },
+      );
+    }
+
+    const users =
+      (data ?? []).map(
+        (user) => ({
+          id: user.id,
+          username:
+            user.username,
+          displayName:
+            user.display_name,
+          avatarUrl:
+            user.avatar_url,
+          bio:
+            user.bio,
+          privacy:
+            user.privacy,
+          followersCount:
+            user.followers_count,
+          followingCount:
+            user.following_count,
+          predictionsCount:
+            user.predictions_count,
+          correctPredictionsCount:
+            user.correct_predictions_count,
+        }),
+      );
 
     return NextResponse.json(
       {
         success: true,
-        ...response,
+        query: search,
+        users,
       },
       {
         status: 200,
@@ -205,7 +142,7 @@ export async function GET(
       {
         success: false,
         message:
-          "Arama gerçekleştirilemedi.",
+          "Arama yapılamadı.",
       },
       {
         status: 500,
